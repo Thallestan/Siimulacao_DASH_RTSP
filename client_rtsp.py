@@ -28,10 +28,10 @@ def main():
     # =====================================================================
     # BLOCO 2: PARÂMETROS VITAIS DE CONTROLE DE BUFFER
     # =====================================================================
-    BUFFER_MAX = 50         # Hard Limit: Memória física total da aplicação
-    HIGH_WATERMARK = 30     # Soft Limit Sup: Pede PAUSE preventivo
-    LOW_WATERMARK = 10      # Soft Limit Inf: Pede PLAY para retomar
-    PLAYBACK_INTERVAL = 0.1 # Consumo: Renderiza 1 pacote a cada 0.1s (10 FPS)
+    BUFFER_MAX = 1250         # Memória física total da aplicação
+    HIGH_WATERMARK = 1000     # Pede PAUSE preventivo
+    LOW_WATERMARK = 300      # Pede PLAY para retomar
+    PLAYBACK_INTERVAL = 0.1 # Renderiza 1 pacote a cada 0.1s (10 FPS)
     
     # =====================================================================
     # BLOCO 3: TELEMETRIA E LOGS (GRAVAÇÃO CSV)
@@ -53,16 +53,15 @@ def main():
         csv_file.flush()
 
     # =====================================================================
-    # BLOCO 4: THREAD DE PLAYBACK (RENDERIZAÇÃO)
+    # BLOCO 4: THREAD DE CONSUMO (O PLAYER DE VÍDEO)
     # =====================================================================
     def thread_playback():
-        """Simula a renderização de quadros de vídeo esvaziando a fila."""
         global buffer_atual, executando
         while executando:
-            time.sleep(PLAYBACK_INTERVAL)
+            time.sleep(0.1) # Taxa de atualização da tela
             with lock:
-                if buffer_atual > 0: 
-                    buffer_atual -= 1
+                # Consome 25 pacotinhos por ciclo
+                buffer_atual = max(0, buffer_atual - 25)
 
     # =====================================================================
     # BLOCO 5: THREAD DE REDE (RTP/UDP + SINALIZAÇÃO TCP)
@@ -83,38 +82,42 @@ def main():
         sock_controle.sendall(b"PLAY\n")
         estado_atual = "PLAY"
         
-        seq_esperado = 0  
+        # Inicialize com -1 para sincronizar no primeiro pacote recebido
+        seq_esperado = -1  
         
         while executando and (time.time() - tempo_inicio) < args.duration:
             try:
-                dados, _ = sock_udp.recvfrom(65535) # Recebe pacote RTP
+                dados, _ = sock_udp.recvfrom(65535) 
                 
-                # --- 5.1: DETECÇÃO DE PERDA DE PACOTES NO ROTEADOR ---
+                # --- 5.1: DETECÇÃO DE PERDA DE PACOTES (ROBUSTA) ---
                 try:
-                    # Lê os primeiros 9 bytes (Ex: "00000105:")
-                    cabecalho = dados[:9].decode('utf-8')
-                    seq_recebido = int(cabecalho.split(':')[0])
-                    
-                    if seq_recebido > seq_esperado:
-                        perdas = seq_recebido - seq_esperado
-                        # O roteador jogou pacote no lixo por causa do gargalo M/M/1
-                        print(f"[-] ROTEADOR: {perdas} pacotes dropados no Switch s1!")
-                        gravar_log(f"Perda de Rede ({perdas} pkts)", tranca=False)
+                    partes = dados.split(b'|', 1)
+                    if len(partes) >= 2:
+                        seq_recebido = int(partes[0].decode('utf-8'))
                         
-                    seq_esperado = seq_recebido + 1
-                except (ValueError, UnicodeDecodeError):
-                    pass # Pacote malformado ou corrompido, ignora a leitura de cabecalho
+                        # Sincronização inicial
+                        if seq_esperado == -1:
+                            seq_esperado = seq_recebido
+                        
+                        if seq_recebido > seq_esperado:
+                            perdas = seq_recebido - seq_esperado
+                            # Agora o log será gravado corretamente!
+                            gravar_log(f"Perda de Rede ({perdas} pkts)", tranca=False)
+                        
+                        # Atualiza para o próximo número que o servidor deveria enviar
+                        seq_esperado = seq_recebido + 1
+                except (ValueError, UnicodeDecodeError, IndexError):
+                    pass # Ignora pacotes que não seguem o formato esperado
                 
-                # --- 5.2: LIMITE FÍSICO DE RAM (TAIL DROP DA APLICAÇÃO) ---
+                # --- 5.2: LIMITE FÍSICO DE RAM ---
                 with lock:
                     if buffer_atual < BUFFER_MAX:
                         buffer_atual += 1
                     else:
-                        print("[!] RAM CHEIA: Pacote UDP descartado pelo cliente!")
-                        gravar_log("Overflow", tranca=False) # Tag usada no plot_results.py
+                        gravar_log("Overflow", tranca=False)
             
             except socket.timeout:
-                pass # Apenas segue para checar as marcas d'água
+                pass
 
             with lock:
                 ocupacao = buffer_atual
