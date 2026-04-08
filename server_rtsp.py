@@ -67,19 +67,21 @@ def main():
         
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s_udp:
             while True:
-                if estado_transmissao == "PLAY" and cliente_addr:
-                    # Carimbo RTP: Insere o número de sequência com 8 dígitos (Ex: "00000105:")
-                    cabecalho = f"{seq_num:08d}:".encode('utf-8')
-                    pacote = cabecalho + DUMMY_DATA
-                    
-                    # Envia o pacote cortado no tamanho exato para controle de banda
-                    s_udp.sendto(pacote[:CHUNK_SIZE], cliente_addr)
-                    seq_num += 1
-                    
-                    # Taxa de Injeção: Dorme 0.01s (Gera ~25 Mbps para estressar o link de 10 Mbps)
-                    time.sleep(0.01) 
-                else:
-                    time.sleep(0.001) # Dorme em estado de PAUSE
+                if estado_transmissao == "PLAY":
+                    try:
+                        # =======================================================
+                        # TRANSMISSÃO EM LOTE (BURST) - ALF
+                        # Dispara 25 pacotes de 1316 bytes de uma vez  
+                        # =======================================================
+                        for _ in range(25):
+                            pacote = f"{seq_num}|".encode('utf-8') + DUMMY_DATA
+                            s_udp.sendto(pacote[:CHUNK_SIZE], cliente_addr)
+                            seq_num += 1
+                        
+                        time.sleep(0.01) # 10ms 
+                        
+                    except Exception as e:
+                        print(f"[-] Erro UDP: {e}")
 
     # =====================================================================
     # BLOCO 5: ORQUESTRAÇÃO DE THREADS

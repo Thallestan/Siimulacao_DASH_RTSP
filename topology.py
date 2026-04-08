@@ -43,9 +43,9 @@ parametros_smartSP = {
     "backbone_loss"   : 0,     # %
     
     # Bottleneck: O link de acesso problemático
-    "bottleneck_bw"   : 5,     # Mbps
+    "bottleneck_bw"   : 10,     # Mbps
     "bottleneck_delay": "5ms",
-    "bottleneck_loss" : 0,     # % (Altere para testar perda de rede)
+    "bottleneck_loss" : 5,     # testar perda de rede
 }
 
 
@@ -109,6 +109,7 @@ def buildyTopology():
         bw    = parametros_smartSP["bottleneck_bw"],
         delay = parametros_smartSP["bottleneck_delay"],
         loss  = parametros_smartSP["bottleneck_loss"],
+        max_queue_size = 100,
     )
 
     return net, h1, h2, s1
