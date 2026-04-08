@@ -44,7 +44,7 @@ def main():
     ax1.scatter(subidas['Tempo_s'], subidas['Tamanho_Buffer'], color='green', marker='^', s=100, label='ABR: Decidiu subir Qualidade', zorder=6)
     ax1.scatter(descidas['Tempo_s'], descidas['Tamanho_Buffer'], color='darkorange', marker='v', s=100, label='ABR: Decidiu baixar Qualidade', zorder=6)
     ax1.scatter(perdas_dash['Tempo_s'], perdas_dash['Tamanho_Buffer'], color='magenta', marker='x', s=80, label='TCP: Retransmissão (Perda)', zorder=7)
-    
+
     ax1.set_title('Modelo Moderno: MPEG-DASH (Lógica Híbrida ABR + Histerese)', fontsize=14)
     ax1.set_ylabel('Tamanho da Fila (Pacotes)')
     ax1.grid(True, linestyle=':', alpha=0.7)
@@ -56,9 +56,9 @@ def main():
     # GRÁFICO 2: RTSP/RTP (Push / UDP)
     # ==========================================
     ax2.plot(df_rtsp['Tempo_s'], df_rtsp['Tamanho_Buffer_Pacotes'], label='Ocupação do Buffer', color='purple', linewidth=2)
-    ax2.axhline(y=50, color='black', linestyle=':', label='Limite Físico (RAM Max - 50)')
-    ax2.axhline(y=30, color='red', linestyle='--', label='Gatilho de Risco (High - 30)')
-    ax2.axhline(y=10, color='green', linestyle='--', label='Gatilho Seguro (Low - 10)')
+    ax2.axhline(y=1250, color='black', linestyle=':', label='Limite Físico (RAM Max - 1250)')
+    ax2.axhline(y=750, color='red', linestyle='--', alpha=0.6, label='Gatilho de Risco (High - 750)')
+    ax2.axhline(y=250, color='green', linestyle='--', alpha=0.6, label='Gatilho Seguro (Low - 250)')
     
     # Eventos Visuais do RTSP
     pausas_rtsp = df_rtsp[df_rtsp['Evento'].str.contains('PAUSE', na=False)]
