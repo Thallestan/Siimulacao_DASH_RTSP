@@ -21,7 +21,6 @@ def filtrar_eventos_importantes(lista_eventos):
     """
     eventos_ignorados = ['Status Buffer Continuo', 'Download Concluido', 'Playback']
     eventos_filtrados = [e for e in lista_eventos if pd.notna(e) and e not in eventos_ignorados]
-    # Remove duplicatas que ocorreram no mesmo segundo para não poluir a tabela
     return " | ".join(list(dict.fromkeys(eventos_filtrados)))
 
 def main():
@@ -63,7 +62,11 @@ def main():
     df_dash = pd.read_csv(csv_dash)
     df_rtsp = pd.read_csv(csv_rtsp)
 
-    # Truncamento de tempo: O evento ocorrido em 1.95s é mapeado para o "Segundo 1"
+    # Filtra o primeiro segundo (Warm-up / Cold Start)
+    df_dash = df_dash[df_dash['Tempo_s'] >= 1.0].copy()
+    df_rtsp = df_rtsp[df_rtsp['Tempo_s'] >= 1.0].copy()
+
+    # Truncamento de tempo
     df_dash['Segundo'] = df_dash['Tempo_s'].astype(int)
     df_rtsp['Segundo'] = df_rtsp['Tempo_s'].astype(int)
 
@@ -74,7 +77,6 @@ def main():
     dash_agrupado = df_dash.groupby('Segundo').agg(
         DASH_Buffer_Medio=('Tamanho_Buffer', 'mean'), # A ocupação média da RAM no segundo
         DASH_Qualidade=('Qualidade', 'last'),         # O estado final da qualidade no segundo
-        # CAPTURA DE PICO: Extrai o pior tempo de download do bloco para provar a ação do ABR
         DASH_Chegada_s=('Tempo_Download_s', lambda x: pd.to_numeric(x, errors='coerce').max()),
         DASH_Eventos=('Evento', lambda x: filtrar_eventos_importantes(x))
     ).reset_index()
@@ -84,13 +86,12 @@ def main():
         RTSP_Eventos=('Evento', lambda x: filtrar_eventos_importantes(x))
     ).reset_index()
 
-# =====================================================================
+    # =====================================================================
     # BLOCO 5: INTERPOLAÇÃO DE DADOS (FORWARD FILL + BACKWARD FILL)
     # Resolve buracos temporais esticando o último estado válido para frente (ffill)
-    # e preenche o instante 0 puxando o dado inicial para trás (bfill)
     # =====================================================================
     tempo_maximo = max(df_dash['Segundo'].max(), df_rtsp['Segundo'].max())
-    df_base = pd.DataFrame({'Segundo': range(int(tempo_maximo) + 1)})
+    df_base = pd.DataFrame({'Segundo': range(1, int(tempo_maximo) + 1)})
 
     # Mescla o DASH com a régua perfeita
     dash_continuo = pd.merge(df_base, dash_agrupado, on='Segundo', how='left')
